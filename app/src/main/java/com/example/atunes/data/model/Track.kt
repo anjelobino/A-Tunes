@@ -12,6 +12,7 @@ data class Track(
     val albumId: Long,
     val duration: Long,          // milliseconds
     val contentUri: String,      // content:// URI string
+    val relativePath: String,    // folder path
     val dateAdded: Long,         // epoch seconds
     val genre: String = "",
     val trackNumber: Int = 0,

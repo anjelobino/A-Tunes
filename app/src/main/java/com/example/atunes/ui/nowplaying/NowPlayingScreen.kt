@@ -219,7 +219,7 @@ fun NowPlayingScreen(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                IconButton(onClick = { state.track?.let { } }) {
+                IconButton(onClick = { state.track?.let { vm.toggleLike(it) } }) {
                     Icon(
                         imageVector = if (state.track?.isLiked == true)
                             Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,

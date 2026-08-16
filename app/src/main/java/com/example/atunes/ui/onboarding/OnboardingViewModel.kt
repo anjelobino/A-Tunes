@@ -22,11 +22,11 @@ class OnboardingViewModel(app: Application) : AndroidViewModel(app) {
     private val _scanState = MutableStateFlow<ScanState>(ScanState.Idle)
     val scanState: StateFlow<ScanState> = _scanState
 
-    fun startScan() {
+    fun startScan(folderFilter: String? = null) {
         viewModelScope.launch {
             _scanState.value = ScanState.Scanning(0)
             try {
-                val total = repo.scanLibrary { count ->
+                val total = repo.scanLibrary(folderFilter = folderFilter) { count ->
                     _scanState.value = ScanState.Scanning(count)
                 }
                 _scanState.value = ScanState.Done(total)

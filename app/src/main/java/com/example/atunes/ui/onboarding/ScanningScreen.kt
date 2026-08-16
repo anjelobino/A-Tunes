@@ -26,12 +26,13 @@ import com.example.atunes.ui.theme.*
 @Composable
 fun ScanningScreen(
     vm: OnboardingViewModel = viewModel(),
+    folderFilter: String? = null,
     onScanComplete: () -> Unit
 ) {
     val scanState by vm.scanState.collectAsStateWithLifecycle()
 
     // Auto-start scan
-    LaunchedEffect(Unit) { vm.startScan() }
+    LaunchedEffect(Unit) { vm.startScan(folderFilter) }
 
     // Navigate when done
     LaunchedEffect(scanState) {

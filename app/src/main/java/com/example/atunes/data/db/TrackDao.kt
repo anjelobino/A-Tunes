@@ -46,6 +46,9 @@ interface TrackDao {
     @Query("SELECT COUNT(*) FROM tracks")
     suspend fun getTrackCount(): Int
 
+    @Delete
+    suspend fun delete(track: Track)
+
     @Query("DELETE FROM tracks")
     suspend fun clearAll()
 }

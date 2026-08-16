@@ -22,7 +22,10 @@ import com.example.atunes.ui.theme.AccentRed
 fun SettingsScreen(
     isDark: Boolean,
     onThemeToggle: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    selectedFolder: String? = null,
+    onSelectFolder: () -> Unit = {},
+    onRescan: () -> Unit = {}
 ) {
     LazyColumn(
         modifier = modifier
@@ -47,14 +50,14 @@ fun SettingsScreen(
                 SettingsRow(
                     icon = Icons.Rounded.FolderOpen,
                     title = "Library Sources",
-                    subtitle = "Manage music folders",
-                    onClick = {}
+                    subtitle = if (selectedFolder.isNullOrBlank()) "All music on device" else "Folder: $selectedFolder",
+                    onClick = onSelectFolder
                 )
                 SettingsRow(
                     icon = Icons.Rounded.Refresh,
                     title = "Rescan Library",
                     subtitle = "Re-index all tracks",
-                    onClick = {}
+                    onClick = onRescan
                 )
             }
         }
@@ -125,8 +128,8 @@ fun SettingsScreen(
             SettingsSection(title = "About") {
                 SettingsRow(
                     icon = Icons.Rounded.Info,
-                    title = "Vinyl Red",
-                    subtitle = "Version 1.0 — Built with ❤️",
+                    title = "ATunes",
+                    subtitle = "Version 1.2 — Developed by Anjelo",
                     onClick = {}
                 )
             }

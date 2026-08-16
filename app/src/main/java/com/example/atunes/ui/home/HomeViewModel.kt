@@ -12,10 +12,16 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import android.app.PendingIntent
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 
 class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repo = MusicRepository(app.applicationContext)
+
+    private val _deletePermissionRequest = MutableSharedFlow<PendingIntent>()
+    val deletePermissionRequest = _deletePermissionRequest.asSharedFlow()
 
     val recentTracks: StateFlow<List<Track>> = repo.getRecentTracks(20)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -34,5 +40,18 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
     fun toggleLike(track: Track) {
         viewModelScope.launch { repo.toggleLike(track) }
+    }
+
+    fun deleteTrack(track: Track) {
+        viewModelScope.launch {
+            try {
+                val intent = repo.deleteTrack(track)
+                if (intent != null) {
+                    _deletePermissionRequest.emit(intent)
+                }
+            } catch (e: Exception) {
+                // Handle error
+            }
+        }
     }
 }

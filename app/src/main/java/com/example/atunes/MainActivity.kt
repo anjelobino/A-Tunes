@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.atunes.service.PlaybackController
@@ -38,6 +39,7 @@ import kotlinx.coroutines.launch
 private val android.content.Context.dataStore by preferencesDataStore(name = "settings")
 private val DARK_THEME_KEY     = booleanPreferencesKey("dark_theme")
 private val LIBRARY_INDEXED_KEY = booleanPreferencesKey("library_indexed")
+private val SELECTED_FOLDER_KEY = stringPreferencesKey("selected_folder")
 
 class MainActivity : ComponentActivity() {
 
@@ -48,15 +50,18 @@ class MainActivity : ComponentActivity() {
         setContent {
             val scope = rememberCoroutineScope()
 
-            // ── Theme state persisted in DataStore ────────────────────────
+            // ── Persisted state ────────────────────────
             val darkTheme by dataStore.data
                 .map { prefs -> prefs[DARK_THEME_KEY] ?: true }
                 .collectAsStateWithLifecycle(initialValue = true)
 
-            // ── First-launch flag ─────────────────────────────────────────
             val libraryIndexed by dataStore.data
                 .map { prefs -> prefs[LIBRARY_INDEXED_KEY] ?: false }
                 .collectAsStateWithLifecycle(initialValue = false)
+
+            val selectedFolder by dataStore.data
+                .map { prefs -> prefs[SELECTED_FOLDER_KEY] }
+                .collectAsStateWithLifecycle(initialValue = null)
 
             // ── Permission state ──────────────────────────────────────────
             val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
@@ -74,14 +79,27 @@ class MainActivity : ComponentActivity() {
                 ActivityResultContracts.RequestPermission()
             ) { granted -> permissionGranted = granted }
 
+            // ── Folder picker ─────────────────────────────────────────────
+            val folderLauncher = rememberLauncherForActivityResult(
+                ActivityResultContracts.OpenDocumentTree()
+            ) { uri ->
+                uri?.let {
+                    // Extract relative path from SAF URI (best effort)
+                    val path = it.path?.substringAfterLast(":") ?: ""
+                    scope.launch {
+                        dataStore.edit { prefs ->
+                            prefs[SELECTED_FOLDER_KEY] = path
+                        }
+                    }
+                }
+            }
+
             ATunesTheme(darkTheme = darkTheme) {
                 if (!permissionGranted) {
-                    // Permission gate screen
                     PermissionScreen(
                         onRequestPermission = { permissionLauncher.launch(permission) }
                     )
                 } else {
-                    // Mark library as indexed after first scan completes
                     AppNavGraph(
                         isDark = darkTheme,
                         onThemeToggle = {
@@ -91,7 +109,16 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         },
-                        isFirstLaunch = !libraryIndexed
+                        isFirstLaunch = !libraryIndexed,
+                        selectedFolder = selectedFolder,
+                        onSelectFolder = { folderLauncher.launch(null) },
+                        onOnboardingComplete = {
+                            scope.launch {
+                                dataStore.edit { prefs ->
+                                    prefs[LIBRARY_INDEXED_KEY] = true
+                                }
+                            }
+                        }
                     )
                 }
             }
@@ -142,7 +169,7 @@ private fun PermissionScreen(onRequestPermission: () -> Unit) {
             )
             Spacer(Modifier.height(12.dp))
             Text(
-                text = "Vinyl Red needs access to your audio files to build your local library. No data ever leaves your device.",
+                text = "ATunes needs access to your audio files to build your local library. No data ever leaves your device.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = Color.White.copy(alpha = 0.7f),
                 textAlign = TextAlign.Center

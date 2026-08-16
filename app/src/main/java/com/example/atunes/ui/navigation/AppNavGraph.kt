@@ -56,7 +56,10 @@ val bottomNavItems = listOf(
 fun AppNavGraph(
     isDark: Boolean,
     onThemeToggle: () -> Unit,
-    isFirstLaunch: Boolean
+    isFirstLaunch: Boolean,
+    selectedFolder: String? = null,
+    onSelectFolder: () -> Unit = {},
+    onOnboardingComplete: () -> Unit = {}
 ) {
     val navController = rememberNavController()
     val nowPlayingState by PlaybackController.state.collectAsStateWithLifecycle()
@@ -147,6 +150,8 @@ fun AppNavGraph(
             // ── Onboarding ────────────────────────────────────────────────
             composable(Routes.WELCOME) {
                 WelcomeScreen(
+                    selectedFolder = selectedFolder,
+                    onSelectFolder = onSelectFolder,
                     onGetStarted = {
                         navController.navigate(Routes.SCANNING) {
                             popUpTo(Routes.WELCOME) { inclusive = true }
@@ -156,7 +161,9 @@ fun AppNavGraph(
             }
             composable(Routes.SCANNING) {
                 ScanningScreen(
+                    folderFilter = selectedFolder,
                     onScanComplete = {
+                        onOnboardingComplete()
                         navController.navigate(Routes.HOME) {
                             popUpTo(Routes.SCANNING) { inclusive = true }
                         }
@@ -182,7 +189,15 @@ fun AppNavGraph(
                 LibraryScreen()
             }
             composable(Routes.SETTINGS) {
-                SettingsScreen(isDark = isDark, onThemeToggle = onThemeToggle)
+                SettingsScreen(
+                    isDark = isDark,
+                    onThemeToggle = onThemeToggle,
+                    selectedFolder = selectedFolder,
+                    onSelectFolder = onSelectFolder,
+                    onRescan = {
+                        navController.navigate(Routes.SCANNING)
+                    }
+                )
             }
 
             // ── Now Playing (full-screen) ──────────────────────────────────

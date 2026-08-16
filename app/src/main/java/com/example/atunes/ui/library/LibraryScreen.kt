@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,6 +40,20 @@ fun LibraryScreen(
     val allTracks by vm.allTracks.collectAsStateWithLifecycle()
     var selectedTab by remember { mutableIntStateOf(0) }
 
+    // Handle delete permission request
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val deleteLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartIntentSenderForResult()
+    ) { }
+
+    LaunchedEffect(vm.deletePermissionRequest) {
+        vm.deletePermissionRequest.collect { pendingIntent ->
+            deleteLauncher.launch(
+                androidx.activity.result.IntentSenderRequest.Builder(pendingIntent.intentSender).build()
+            )
+        }
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -61,10 +76,12 @@ fun LibraryScreen(
             contentColor = AccentRed,
             edgePadding = 20.dp,
             indicator = { tabPositions ->
-                TabRowDefaults.SecondaryIndicator(
-                    modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                    color = AccentRed
-                )
+                if (selectedTab < tabPositions.size) {
+                    TabRowDefaults.SecondaryIndicator(
+                        modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
+                        color = AccentRed
+                    )
+                }
             }
         ) {
             tabs.forEachIndexed { i, label ->
@@ -88,10 +105,10 @@ fun LibraryScreen(
         // ── Tab content ───────────────────────────────────────────────────
         when (selectedTab) {
             0 -> PlaylistsTab(playlists)
-            1 -> LikedTab(likedTracks, onPlay = { vm.playTracks(likedTracks, it) })
+            1 -> LikedTab(likedTracks, onPlay = { vm.playTracks(likedTracks, it) }, onDelete = { vm.deleteTrack(it) })
             2 -> ArtistsTab(artists.map { it.artist })
             3 -> AlbumsTab(allTracks)
-            4 -> FoldersTab()
+            4 -> FoldersTab(allTracks, onPlay = { vm.playTracks(it) })
         }
     }
 }
@@ -142,7 +159,7 @@ private fun PlaylistsTab(playlists: List<com.example.atunes.data.model.Playlist>
 }
 
 @Composable
-private fun LikedTab(tracks: List<Track>, onPlay: (Int) -> Unit) {
+private fun LikedTab(tracks: List<Track>, onPlay: (Int) -> Unit, onDelete: (Track) -> Unit) {
     LazyColumn(
         contentPadding = PaddingValues(vertical = 8.dp)
     ) {
@@ -198,6 +215,34 @@ private fun LikedTab(tracks: List<Track>, onPlay: (Int) -> Unit) {
                         overflow = TextOverflow.Ellipsis
                     )
                 }
+                
+                var showMenu by remember { mutableStateOf(false) }
+                Box {
+                    IconButton(onClick = { showMenu = true }) {
+                        Icon(
+                            Icons.Rounded.MoreVert,
+                            contentDescription = "Options",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Delete from Device") },
+                            onClick = {
+                                showMenu = false
+                                onDelete(track)
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Rounded.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                            }
+                        )
+                    }
+                }
+
                 Icon(
                     Icons.Rounded.Favorite,
                     contentDescription = null,
@@ -297,9 +342,69 @@ private fun AlbumsTab(tracks: List<Track>) {
 }
 
 @Composable
-private fun FoldersTab() {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        EmptyState(icon = Icons.Rounded.Folder, text = "Folder view coming soon.")
+private fun FoldersTab(tracks: List<Track>, onPlay: (List<Track>) -> Unit) {
+    val folders = remember(tracks) {
+        tracks.groupBy { it.relativePath }.entries.sortedBy { it.key }
+    }
+
+    LazyColumn(
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        if (folders.isEmpty()) {
+            item {
+                EmptyState(
+                    icon = Icons.Rounded.Folder,
+                    text = "No folders found with music."
+                )
+            }
+        }
+        items(folders) { (path, folderTracks) ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .clickable { onPlay(folderTracks) }
+                    .padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Rounded.Folder,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = path.split("/").last().ifEmpty { "Root" },
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    Text(
+                        text = "${folderTracks.size} songs • $path",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Icon(
+                    Icons.Rounded.PlayArrow,
+                    contentDescription = "Play Folder",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
     }
 }
 

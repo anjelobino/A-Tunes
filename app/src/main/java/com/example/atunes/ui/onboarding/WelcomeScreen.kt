@@ -5,6 +5,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -21,7 +23,11 @@ import androidx.compose.ui.unit.sp
 import com.example.atunes.ui.theme.*
 
 @Composable
-fun WelcomeScreen(onGetStarted: () -> Unit) {
+fun WelcomeScreen(
+    selectedFolder: String? = null,
+    onSelectFolder: () -> Unit,
+    onGetStarted: () -> Unit
+) {
     val infiniteTransition = rememberInfiniteTransition(label = "vinyl")
     val rotation by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -96,7 +102,7 @@ fun WelcomeScreen(onGetStarted: () -> Unit) {
 
             // App name
             Text(
-                text = "Vinyl Red",
+                text = "ATunes",
                 style = MaterialTheme.typography.displayMedium,
                 color = AccentRed
             )
@@ -110,28 +116,6 @@ fun WelcomeScreen(onGetStarted: () -> Unit) {
                 textAlign = TextAlign.Center,
                 lineHeight = 26.sp
             )
-
-            Spacer(Modifier.height(16.dp))
-
-            // Feature bullets
-            listOf(
-                "🎵  Plays MP3, FLAC, WAV, M4A, OGG",
-                "📵  100% offline — no account, no ads",
-                "⚡  Instant local search"
-            ).forEach { feat ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Text(
-                        text = feat,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = TextSecondary.copy(alpha = 0.8f)
-                    )
-                }
-            }
 
             Spacer(Modifier.height(48.dp))
 
@@ -150,6 +134,25 @@ fun WelcomeScreen(onGetStarted: () -> Unit) {
                 Text(
                     text = "Get Started",
                     style = MaterialTheme.typography.headlineSmall
+                )
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            OutlinedButton(
+                onClick = onSelectFolder,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                shape = RoundedCornerShape(16.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, AccentRed.copy(alpha = 0.5f)),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentRed)
+            ) {
+                Icon(Icons.Rounded.Folder, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = if (selectedFolder.isNullOrBlank()) "Choose Music Folder" else "Folder: $selectedFolder",
+                    style = MaterialTheme.typography.bodyLarge
                 )
             }
 

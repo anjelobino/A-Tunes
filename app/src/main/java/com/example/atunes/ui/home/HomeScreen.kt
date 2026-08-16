@@ -38,6 +38,19 @@ fun HomeScreen(
     val recentTracks by vm.recentTracks.collectAsStateWithLifecycle()
     val albums by vm.albums.collectAsStateWithLifecycle()
 
+    // Handle delete permission request
+    val deleteLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartIntentSenderForResult()
+    ) { }
+
+    LaunchedEffect(vm.deletePermissionRequest) {
+        vm.deletePermissionRequest.collect { pendingIntent ->
+            deleteLauncher.launch(
+                androidx.activity.result.IntentSenderRequest.Builder(pendingIntent.intentSender).build()
+            )
+        }
+    }
+
     val categories = listOf("All", "Relax", "Party", "Lo-fi", "Romantic", "Hip-Hop", "Classical")
     var selectedCategory by remember { mutableStateOf("All") }
 
@@ -175,7 +188,8 @@ fun HomeScreen(
             TrackRow(
                 track = track,
                 onClick = { onTrackClick(recentTracks, index) },
-                onLike = { vm.toggleLike(track) }
+                onLike = { vm.toggleLike(track) },
+                onDelete = { vm.deleteTrack(track) }
             )
         }
     }
@@ -222,7 +236,7 @@ private fun AlbumCard(track: Track, albumName: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun TrackRow(track: Track, onClick: () -> Unit, onLike: () -> Unit) {
+private fun TrackRow(track: Track, onClick: () -> Unit, onLike: () -> Unit, onDelete: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -260,6 +274,34 @@ private fun TrackRow(track: Track, onClick: () -> Unit, onLike: () -> Unit) {
                 overflow = TextOverflow.Ellipsis
             )
         }
+        
+        var showMenu by remember { mutableStateOf(false) }
+        Box {
+            IconButton(onClick = { showMenu = true }) {
+                Icon(
+                    Icons.Rounded.MoreVert,
+                    contentDescription = "Options",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            DropdownMenu(
+                expanded = showMenu,
+                onDismissRequest = { showMenu = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Delete from Device") },
+                    onClick = {
+                        showMenu = false
+                        onDelete()
+                    },
+                    leadingIcon = {
+                        Icon(Icons.Rounded.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                    }
+                )
+            }
+        }
+
         IconButton(onClick = onLike) {
             Icon(
                 imageVector = if (track.isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,

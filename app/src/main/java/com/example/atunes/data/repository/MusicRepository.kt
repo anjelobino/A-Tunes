@@ -20,10 +20,12 @@ class MusicRepository(private val context: Context) {
 
     /**
      * Scan device via MediaStore and populate Room DB.
-     * Only lightweight metadata is extracted — no audio decoding.
-     * [onProgress] is called with the running count after each batch.
+     * [folderFilter] if provided, only tracks in this relative path (and subfolders) are included.
      */
-    suspend fun scanLibrary(onProgress: (Int) -> Unit = {}) = withContext(Dispatchers.IO) {
+    suspend fun scanLibrary(
+        folderFilter: String? = null,
+        onProgress: (Int) -> Unit = {}
+    ) = withContext(Dispatchers.IO) {
         val tracks = mutableListOf<Track>()
 
         val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -41,17 +43,35 @@ class MusicRepository(private val context: Context) {
             MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.DATE_ADDED,
             MediaStore.Audio.Media.TRACK,
-            // Genre requires separate query on older APIs; skip for now
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                MediaStore.Audio.Media.RELATIVE_PATH
+            } else {
+                MediaStore.Audio.Media.DATA
+            }
         )
 
-        val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND ${MediaStore.Audio.Media.DURATION} > 30000"
+        var selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND ${MediaStore.Audio.Media.DURATION} > 30000"
+        val selectionArgs = mutableListOf<String>()
+
+        if (!folderFilter.isNullOrBlank()) {
+            val pathKey = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                MediaStore.Audio.Media.RELATIVE_PATH
+            } else {
+                MediaStore.Audio.Media.DATA
+            }
+            // Match the folder and its subdirectories
+            selection += " AND ($pathKey = ? OR $pathKey LIKE ?)"
+            selectionArgs.add(folderFilter)
+            selectionArgs.add("${folderFilter.trimEnd('/')}/%")
+        }
+
         val sortOrder = "${MediaStore.Audio.Media.DATE_ADDED} DESC"
 
         context.contentResolver.query(
             collection,
             projection,
             selection,
-            null,
+            if (selectionArgs.isEmpty()) null else selectionArgs.toTypedArray(),
             sortOrder
         )?.use { cursor ->
             val idCol       = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
@@ -62,12 +82,25 @@ class MusicRepository(private val context: Context) {
             val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
             val dateCol     = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
             val trackNumCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK)
+            val pathCol     = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.RELATIVE_PATH)
+            } else {
+                cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
+            }
 
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idCol)
                 val contentUri = ContentUris.withAppendedId(
                     MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id
                 ).toString()
+
+                val rawPath = cursor.getString(pathCol) ?: "Unknown"
+                val relativePath = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    rawPath.trim('/')
+                } else {
+                    // Extract folder from absolute path
+                    rawPath.substringBeforeLast('/', "Unknown").substringAfterLast('/', "Unknown")
+                }
 
                 tracks += Track(
                     id          = id,
@@ -77,6 +110,7 @@ class MusicRepository(private val context: Context) {
                     albumId     = cursor.getLong(albumIdCol),
                     duration    = cursor.getLong(durationCol),
                     contentUri  = contentUri,
+                    relativePath = relativePath,
                     dateAdded   = cursor.getLong(dateCol),
                     trackNumber = cursor.getInt(trackNumCol)
                 )
@@ -114,6 +148,25 @@ class MusicRepository(private val context: Context) {
 
     suspend fun toggleLike(track: Track) {
         trackDao.setLiked(track.id, !track.isLiked)
+    }
+
+    /**
+     * Deletes a track from the device storage and the database.
+     * Returns a PendingIntent if user consent is required (Android 10+), or null if deleted.
+     */
+    suspend fun deleteTrack(track: Track): android.app.PendingIntent? = withContext(Dispatchers.IO) {
+        try {
+            val uri = Uri.parse(track.contentUri)
+            context.contentResolver.delete(uri, null, null)
+            trackDao.delete(track)
+            null
+        } catch (e: Exception) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && e is android.app.RecoverableSecurityException) {
+                e.userAction.actionIntent
+            } else {
+                throw e
+            }
+        }
     }
 
     suspend fun getTrackCount() = trackDao.getTrackCount()
