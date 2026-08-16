@@ -1,47 +1,159 @@
 package com.example.atunes
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.preferencesDataStore
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.atunes.service.PlaybackController
+import com.example.atunes.ui.navigation.AppNavGraph
 import com.example.atunes.ui.theme.ATunesTheme
+import com.example.atunes.ui.theme.AccentRed
+import com.example.atunes.ui.theme.BackgroundPrimary
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
+
+private val android.content.Context.dataStore by preferencesDataStore(name = "settings")
+private val DARK_THEME_KEY     = booleanPreferencesKey("dark_theme")
+private val LIBRARY_INDEXED_KEY = booleanPreferencesKey("library_indexed")
 
 class MainActivity : ComponentActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
         setContent {
-            ATunesTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
+            val scope = rememberCoroutineScope()
+
+            // ── Theme state persisted in DataStore ────────────────────────
+            val darkTheme by dataStore.data
+                .map { prefs -> prefs[DARK_THEME_KEY] ?: true }
+                .collectAsStateWithLifecycle(initialValue = true)
+
+            // ── First-launch flag ─────────────────────────────────────────
+            val libraryIndexed by dataStore.data
+                .map { prefs -> prefs[LIBRARY_INDEXED_KEY] ?: false }
+                .collectAsStateWithLifecycle(initialValue = false)
+
+            // ── Permission state ──────────────────────────────────────────
+            val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                Manifest.permission.READ_MEDIA_AUDIO
+            else
+                Manifest.permission.READ_EXTERNAL_STORAGE
+
+            var permissionGranted by remember {
+                mutableStateOf(
+                    ContextCompat.checkSelfPermission(this, permission) ==
+                            PackageManager.PERMISSION_GRANTED
+                )
+            }
+            val permissionLauncher = rememberLauncherForActivityResult(
+                ActivityResultContracts.RequestPermission()
+            ) { granted -> permissionGranted = granted }
+
+            ATunesTheme(darkTheme = darkTheme) {
+                if (!permissionGranted) {
+                    // Permission gate screen
+                    PermissionScreen(
+                        onRequestPermission = { permissionLauncher.launch(permission) }
+                    )
+                } else {
+                    // Mark library as indexed after first scan completes
+                    AppNavGraph(
+                        isDark = darkTheme,
+                        onThemeToggle = {
+                            scope.launch {
+                                dataStore.edit { prefs ->
+                                    prefs[DARK_THEME_KEY] = !(prefs[DARK_THEME_KEY] ?: true)
+                                }
+                            }
+                        },
+                        isFirstLaunch = !libraryIndexed
                     )
                 }
             }
         }
     }
+
+    override fun onStart() {
+        super.onStart()
+        PlaybackController.connect(this)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // Keep controller alive so background playback continues
+        // Only disconnect on destroy
+    }
+
+    override fun onDestroy() {
+        PlaybackController.disconnect()
+        super.onDestroy()
+    }
 }
 
 @Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    ATunesTheme {
-        Greeting("Android")
+private fun PermissionScreen(onRequestPermission: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(BackgroundPrimary),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier.padding(40.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.MusicNote,
+                contentDescription = null,
+                tint = AccentRed,
+                modifier = Modifier.size(72.dp)
+            )
+            Spacer(Modifier.height(24.dp))
+            Text(
+                text = "Allow Access to Music",
+                style = MaterialTheme.typography.headlineMedium,
+                color = Color.White,
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(12.dp))
+            Text(
+                text = "Vinyl Red needs access to your audio files to build your local library. No data ever leaves your device.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.White.copy(alpha = 0.7f),
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(32.dp))
+            Button(
+                onClick = onRequestPermission,
+                colors = ButtonDefaults.buttonColors(containerColor = AccentRed)
+            ) {
+                Text("Grant Permission", color = Color.White)
+            }
+        }
     }
 }
