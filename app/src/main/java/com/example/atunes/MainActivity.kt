@@ -40,6 +40,8 @@ private val android.content.Context.dataStore by preferencesDataStore(name = "se
 private val DARK_THEME_KEY     = booleanPreferencesKey("dark_theme")
 private val LIBRARY_INDEXED_KEY = booleanPreferencesKey("library_indexed")
 private val SELECTED_FOLDER_KEY = stringPreferencesKey("selected_folder")
+private val CROSSFADE_KEY       = booleanPreferencesKey("crossfade")
+private val GAPLESS_KEY         = booleanPreferencesKey("gapless")
 
 class MainActivity : ComponentActivity() {
 
@@ -62,6 +64,14 @@ class MainActivity : ComponentActivity() {
             val selectedFolder by dataStore.data
                 .map { prefs -> prefs[SELECTED_FOLDER_KEY] }
                 .collectAsStateWithLifecycle(initialValue = null)
+
+            val crossfade by dataStore.data
+                .map { prefs -> prefs[CROSSFADE_KEY] ?: false }
+                .collectAsStateWithLifecycle(initialValue = false)
+
+            val gapless by dataStore.data
+                .map { prefs -> prefs[GAPLESS_KEY] ?: true }
+                .collectAsStateWithLifecycle(initialValue = true)
 
             // ── Permission state ──────────────────────────────────────────
             val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
@@ -112,6 +122,18 @@ class MainActivity : ComponentActivity() {
                         isFirstLaunch = !libraryIndexed,
                         selectedFolder = selectedFolder,
                         onSelectFolder = { folderLauncher.launch(null) },
+                        crossfade = crossfade,
+                        gapless = gapless,
+                        onCrossfadeToggle = { enabled ->
+                            scope.launch {
+                                dataStore.edit { prefs -> prefs[CROSSFADE_KEY] = enabled }
+                            }
+                        },
+                        onGaplessToggle = { enabled ->
+                            scope.launch {
+                                dataStore.edit { prefs -> prefs[GAPLESS_KEY] = enabled }
+                            }
+                        },
                         onOnboardingComplete = {
                             scope.launch {
                                 dataStore.edit { prefs ->

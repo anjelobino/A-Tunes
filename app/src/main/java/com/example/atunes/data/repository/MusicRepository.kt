@@ -121,9 +121,19 @@ class MusicRepository(private val context: Context) {
             }
         }
 
-        // Clear stale data and insert fresh batch
+        // ── Persist library updates ──────────────────────────────────
+        // 1. Remember which tracks were liked before clearing
+        val likedIds = trackDao.getLikedTrackIds()
+        
+        // 2. Clear and insert fresh metadata
         trackDao.clearAll()
         trackDao.insertAll(tracks)
+        
+        // 3. Restore liked status for tracks that still exist
+        if (likedIds.isNotEmpty()) {
+            trackDao.restoreLikedStatus(likedIds)
+        }
+        
         onProgress(tracks.size)
         tracks.size
     }

@@ -59,6 +59,10 @@ fun AppNavGraph(
     isFirstLaunch: Boolean,
     selectedFolder: String? = null,
     onSelectFolder: () -> Unit = {},
+    crossfade: Boolean = false,
+    gapless: Boolean = true,
+    onCrossfadeToggle: (Boolean) -> Unit = {},
+    onGaplessToggle: (Boolean) -> Unit = {},
     onOnboardingComplete: () -> Unit = {}
 ) {
     val navController = rememberNavController()
@@ -194,6 +198,10 @@ fun AppNavGraph(
                     onThemeToggle = onThemeToggle,
                     selectedFolder = selectedFolder,
                     onSelectFolder = onSelectFolder,
+                    crossfade = crossfade,
+                    gapless = gapless,
+                    onCrossfadeToggle = onCrossfadeToggle,
+                    onGaplessToggle = onGaplessToggle,
                     onRescan = {
                         navController.navigate(Routes.SCANNING)
                     }

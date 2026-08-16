@@ -25,6 +25,10 @@ fun SettingsScreen(
     modifier: Modifier = Modifier,
     selectedFolder: String? = null,
     onSelectFolder: () -> Unit = {},
+    crossfade: Boolean = false,
+    gapless: Boolean = true,
+    onCrossfadeToggle: (Boolean) -> Unit = {},
+    onGaplessToggle: (Boolean) -> Unit = {},
     onRescan: () -> Unit = {}
 ) {
     LazyColumn(
@@ -91,22 +95,19 @@ fun SettingsScreen(
         // ── Playback ──────────────────────────────────────────────────────
         item {
             SettingsSection(title = "Playback") {
-                var crossfade by remember { mutableStateOf(false) }
-                var gapless by remember { mutableStateOf(true) }
-
                 SettingsToggleRow(
                     icon = Icons.Rounded.Tune,
                     title = "Crossfade",
                     subtitle = "Fade between tracks",
                     checked = crossfade,
-                    onCheckedChange = { crossfade = it }
+                    onCheckedChange = onCrossfadeToggle
                 )
                 SettingsToggleRow(
                     icon = Icons.Rounded.MusicNote,
                     title = "Gapless Playback",
                     subtitle = "No silence between tracks",
                     checked = gapless,
-                    onCheckedChange = { gapless = it }
+                    onCheckedChange = onGaplessToggle
                 )
             }
         }

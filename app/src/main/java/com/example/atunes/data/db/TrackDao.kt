@@ -7,8 +7,14 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface TrackDao {
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertAll(tracks: List<Track>)
+
+    @Query("SELECT id FROM tracks WHERE isLiked = 1")
+    suspend fun getLikedTrackIds(): List<Long>
+
+    @Query("UPDATE tracks SET isLiked = 1 WHERE id IN (:ids)")
+    suspend fun restoreLikedStatus(ids: List<Long>)
 
     @Query("SELECT * FROM tracks ORDER BY dateAdded DESC")
     fun getAllTracks(): Flow<List<Track>>
